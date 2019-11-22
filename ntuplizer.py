@@ -149,20 +149,30 @@ if __name__ == "__main__":
          
         evdesc.get(event)
         
-        # For every calo jet, look for the nearest PF jet
-        for i, caloJ in enumerate(evdesc.caloJet.product()):
-            print("Calo Jet #{}: pt {} eta {} phi {}".format(i, caloJ.pt(), caloJ.eta(), caloJ.phi()))
+        # For every pf jet, look for the nearest calo jet
+        for i, pfJ in enumerate(evdesc.pfJet.product()):
+            print("PF Jet #{}: pt {} eta {} phi {}".format(i, pfJ.pt(), pfJ.eta(), pfJ.phi()))
             minDR = 1e8
             bestJ = 0
-            for j, pfJ in enumerate(evdesc.pfJet.product()):
+            for j, caloJ in enumerate(evdesc.caloJet.product()):
                 dR = deltaR(caloJ, pfJ)
                 if dR < minDR:
                     minDR = dR
                     bestJ = j
-            bestmatch = evdesc.pfJet.product().at(bestJ)
-            print("\tMatching pfJet at {}: pt {} eta {} phi {}".format(bestJ, bestmatch.pt(), 
+            bestmatch = evdesc.caloJet.product().at(bestJ)
+            print("\tMatching caloJet #{}: pt {} eta {} phi {}. Distance = {}".format(bestJ, bestmatch.pt(), 
                                                                     bestmatch.eta(),
-                                                                    bestmatch.phi()))
+                                                                    bestmatch.phi(),
+                                                                    minDR))
+
+            # Find all the pixel tracks of the given calo jet cone
+            for t, ptrack in enumerate(evdesc.pixelTrack.product()):
+                dR = deltaR(bestmatch, ptrack)
+                print("dR = {}".format(dR))
+                if dR < 0.4:
+                    print("\tTrack #{}: pt {} eta {} phi {}".format(t, ptrack.pt(),
+                                                                    ptrack.eta(),
+                                                                    ptrack.phi()))
 
 
          # caloTower is empty on the first event, not sure why
