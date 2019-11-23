@@ -35,13 +35,13 @@ class JetDataset(Dataset):
 
     def get_norm(self):
         self.px_mean = np.mean(self.pfjets_px[:].flatten())
-        self.px_std = np.std(self.pfjets_px[:].flatten())
+        self.px_std = np.std(self.pfjets_px[:].astype(np.float64).flatten()) # numpy std doesn't work with float16
         self.py_mean = np.mean(self.pfjets_py[:].flatten())
-        self.py_std = np.std(self.pfjets_py[:].flatten())
+        self.py_std = np.std(self.pfjets_py[:].astype(np.float64).flatten())
         self.pz_mean = np.mean(self.pfjets_pz[:].flatten())
-        self.pz_std = np.std(self.pfjets_pz[:].flatten())
+        self.pz_std = np.std(self.pfjets_pz[:].astype(np.float64).flatten())
         self.energy_mean = np.mean(self.pfjets_energy[:].flatten())
-        self.energy_std = np.std(self.pfjets_energy[:].flatten())
+        self.energy_std = np.std(self.pfjets_energy[:].astype(np.float64).flatten())
 
     def set_norm(self):
         self.pfjets_px = ((self.pfjets_px[:] - self.px_mean)/self.px_std).astype(np.float32)
@@ -53,7 +53,6 @@ class JetDataset(Dataset):
         self.calojets_py = ((self.calojets_py[:] - self.py_mean)/self.py_std).astype(np.float32)
         self.calojets_pz = ((self.calojets_pz[:] - self.pz_mean)/self.pz_std).astype(np.float32)
         self.calojets_energy = ((self.calojets_energy[:] - self.energy_mean)/self.energy_std).astype(np.float32)
-
 
     def __len__(self):
         return len(self.pfjets_px)
@@ -124,7 +123,7 @@ def train(model, train_loader, val_loader, epoch, loss_function, optimizer, sche
         loop.set_postfix(loss=loss.item())
     del loop 
     model.eval()
-    loop = tqdm(val_loader, ncols=200)
+    loop = tqdm(val_loader, ncols=100)
     for data, target in loop:
         if torch.cuda.is_available():
             data, target = (data.cuda(), 
@@ -144,7 +143,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Autoencoder for PF regression.')
     parser.add_argument("-i", '--input', default="step3_jets.h5", help='Input dataset')
     parser.add_argument("-b", '--batch-size', default=256, help='Batch size')
-    parser.add_argument("-e", '--epochs', default=200, help='Number of epochs')
+    parser.add_argument("-e", '--epochs', default=100, help='Number of epochs')
     parser.add_argument("-v", '--val-frac', default=0.2, help='Validation set fraction')
     parser.add_argument("-s", '--random-seed', default=12, help='Random seed')
     args = parser.parse_args()
@@ -194,4 +193,6 @@ if __name__ == "__main__":
                 epoch=epoch,
                 scheduler=scheduler)
     model.save("test.torch")
+    print("Loss history:")
+    print(losses)
     # TODO: Tensorboard to keep the loss history
