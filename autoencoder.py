@@ -71,20 +71,24 @@ class JetDataset(Dataset):
         return (calojets, pfjets)
 
 class AutoEncoder(nn.Module):
-    def __init__(self, features, latent_dim=2):
+    def __init__(self, features, latent_dim=50):
         super(AutoEncoder, self).__init__()
         self.encoder = nn.Sequential(
                 nn.Linear(features, int(features*2)),
                 nn.ReLU(True),
-                nn.Linear(int(features*2), int(features)),
+                nn.Linear(int(features*2), int(features*5)),
                 nn.ReLU(True),
-                nn.Linear(int(features), latent_dim),
+                nn.Linear(int(features*5), features*7),
+                nn.ReLU(True),
+                nn.Linear(int(features*7), latent_dim),
                 nn.ReLU(True)
                 )
         self.decoder = nn.Sequential(
-                nn.Linear(latent_dim, int(features)),
+                nn.Linear(latent_dim, int(features*7)),
                 nn.ReLU(True),
-                nn.Linear(int(features), int(features*2)),
+                nn.Linear(int(features*7), int(features*5)),
+                nn.ReLU(True),
+                nn.Linear(int(features*5), features*2),
                 nn.ReLU(True),
                 nn.Linear(int(features*2), features),
             )
@@ -123,7 +127,6 @@ def train(model, train_loader, val_loader, epoch, loss_function, optimizer, sche
         
         loop.set_description('Epoch {}/{}'.format(epoch + 1, n_epochs))
         loop.set_postfix(loss=sumloss/ndata)
-        scheduler.step(sumloss/ndata)
 
     del loop 
     model.eval()
@@ -144,6 +147,7 @@ def train(model, train_loader, val_loader, epoch, loss_function, optimizer, sche
         
         loop.set_description('Validation')
         loop.set_postfix(loss=sumloss/ndata)
+    scheduler.step(sumloss/ndata)
     del loop
 
 if __name__ == "__main__":
@@ -187,13 +191,19 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         model = model.cuda()
 
-    criterion = torch.nn.L1Loss(reduction='sum')
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, momentum=0.9)
-    scheduler = OneCycleLR(optimizer,
-                         max_lr=1e-3,
-                         steps_per_epoch=len(train_loader),
-                         epochs=n_epochs
-                         )
+    criterion = torch.nn.MSELoss(reduction='sum')
+    #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, momentum=0.9)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    scheduler = ReduceLROnPlateau(optimizer,
+                                 factor=0.3,
+                                 patience=5,
+                                 verbose=1,
+                                 min_lr=1e-6)
+#    scheduler = OneCycleLR(optimizer,
+#                         max_lr=1e-3,
+#                         steps_per_epoch=len(train_loader),
+#                         epochs=n_epochs
+#                         )
     losses = {'train': [], 'val': []}
     for epoch in range(n_epochs):
         train(model=model, train_loader=train_loader,
