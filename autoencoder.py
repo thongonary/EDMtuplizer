@@ -7,7 +7,7 @@ from tqdm import tqdm
 from torch import nn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import ReduceLROnPlateau, CyclicLR, OneCycleLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau #, CyclicLR, OneCycleLR
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
