@@ -71,25 +71,25 @@ class JetDataset(Dataset):
         return (calojets, pfjets)
 
 class AutoEncoder(nn.Module):
-    def __init__(self, features, latent_dim=50):
+    def __init__(self, features, latent_dim=100):
         super(AutoEncoder, self).__init__()
         self.encoder = nn.Sequential(
                 nn.Linear(features, int(features*2)),
-                nn.ReLU(True),
+                nn.PReLU(),
                 nn.Linear(int(features*2), int(features*5)),
-                nn.ReLU(True),
-                nn.Linear(int(features*5), features*7),
-                nn.ReLU(True),
-                nn.Linear(int(features*7), latent_dim),
-                nn.ReLU(True)
+                nn.PReLU(),
+                nn.Linear(int(features*5), features*10),
+                nn.PReLU(),
+                nn.Linear(int(features*10), latent_dim),
+                nn.PReLU()
                 )
         self.decoder = nn.Sequential(
-                nn.Linear(latent_dim, int(features*7)),
-                nn.ReLU(True),
-                nn.Linear(int(features*7), int(features*5)),
-                nn.ReLU(True),
+                nn.Linear(latent_dim, int(features*10)),
+                nn.PReLU(),
+                nn.Linear(int(features*10), int(features*5)),
+                nn.PReLU(),
                 nn.Linear(int(features*5), features*2),
-                nn.ReLU(True),
+                nn.PReLU(),
                 nn.Linear(int(features*2), features),
             )
 
