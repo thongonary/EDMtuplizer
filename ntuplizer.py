@@ -5,6 +5,7 @@ from DataFormats.FWLite import Events, Handle
 import math
 import argparse
 import h5py
+from tqdm import tqdm
 
 class HandleLabel:
     def __init__(self, dtype, label):
@@ -45,6 +46,9 @@ class Output:
         self.pfjets_eta = np.zeros((self.maxEvents, self.maxpfjets), dtype=np.float32)
         self.pfjets_phi = np.zeros((self.maxEvents, self.maxpfjets), dtype=np.float32)
         self.pfjets_energy = np.zeros((self.maxEvents, self.maxpfjets), dtype=np.float32)
+        self.pfjets_px = np.zeros((self.maxEvents, self.maxpfjets), dtype=np.float32)
+        self.pfjets_py = np.zeros((self.maxEvents, self.maxpfjets), dtype=np.float32)
+        self.pfjets_pz = np.zeros((self.maxEvents, self.maxpfjets), dtype=np.float32)
 
         # Calo Jets
         self.maxcalojets = 200
@@ -52,18 +56,19 @@ class Output:
         self.calojets_eta = np.zeros((self.maxEvents, self.maxcalojets), dtype=np.float32)
         self.calojets_phi = np.zeros((self.maxEvents, self.maxcalojets), dtype=np.float32)
         self.calojets_energy = np.zeros((self.maxEvents, self.maxcalojets), dtype=np.float32)
+        self.calojets_px = np.zeros((self.maxEvents, self.maxcalojets), dtype=np.float32)
+        self.calojets_py = np.zeros((self.maxEvents, self.maxcalojets), dtype=np.float32)
+        self.calojets_pz = np.zeros((self.maxEvents, self.maxcalojets), dtype=np.float32)
 
         # Pixel tracks inside the calo jet cone
         self.maxtracks = 20
         self.tracks_pt = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
         self.tracks_eta = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
         self.tracks_phi = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
-        self.tracks_dxy = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
-        self.tracks_dsz = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
-        self.tracks_inner_eta = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
-        self.tracks_inner_phi = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
-        self.tracks_outer_eta = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
-        self.tracks_outer_phi = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
+        self.tracks_px = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
+        self.tracks_py = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
+        self.tracks_pz = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
+        
         # Calo Tower
         # To be updated
 
@@ -74,15 +79,24 @@ class Output:
             outfile.create_dataset("pfjets_eta", data=self.pfjets_eta, dtype=np.float16)
             outfile.create_dataset("pfjets_phi", data=self.pfjets_phi, dtype=np.float16)
             outfile.create_dataset("pfjets_energy", data=self.pfjets_energy, dtype=np.float16)
+            outfile.create_dataset("pfjets_px", data=self.pfjets_px, dtype=np.float16)
+            outfile.create_dataset("pfjets_py", data=self.pfjets_py, dtype=np.float16)
+            outfile.create_dataset("pfjets_pz", data=self.pfjets_pz, dtype=np.float16)
 
             outfile.create_dataset("calojets_pt", data=self.calojets_pt, dtype=np.float16)
             outfile.create_dataset("calojets_eta", data=self.calojets_eta, dtype=np.float16)
             outfile.create_dataset("calojets_phi", data=self.calojets_phi, dtype=np.float16)
             outfile.create_dataset("calojets_energy", data=self.calojets_energy, dtype=np.float16)
+            outfile.create_dataset("calojets_px", data=self.calojets_px, dtype=np.float16)
+            outfile.create_dataset("calojets_py", data=self.calojets_py, dtype=np.float16)
+            outfile.create_dataset("calojets_pz", data=self.calojets_pz, dtype=np.float16)
 
             outfile.create_dataset("tracks_pt", data=self.tracks_pt, dtype=np.float16)
             outfile.create_dataset("tracks_eta", data=self.tracks_eta, dtype=np.float16)
             outfile.create_dataset("tracks_phi", data=self.tracks_phi, dtype=np.float16)
+            outfile.create_dataset("tracks_px", data=self.tracks_px, dtype=np.float16)
+            outfile.create_dataset("tracks_py", data=self.tracks_py, dtype=np.float16)
+            outfile.create_dataset("tracks_pz", data=self.tracks_pz, dtype=np.float16)
 
         print("Saved output to {}".format(filename))
 
@@ -90,17 +104,26 @@ class Output:
         self.tracks_pt.fill(0)
         self.tracks_phi.fill(0)
         self.tracks_eta.fill(0)
+        self.tracks_px.fill(0)
+        self.tracks_py.fill(0)
+        self.tracks_pz.fill(0)
 
         self.npfjets.fill(0)
         self.pfjets_pt.fill(0)
         self.pfjets_eta.fill(0)
         self.pfjets_phi.fill(0)
         self.pfjets_energy.fill(0)
+        self.pfjets_px.fill(0)
+        self.pfjets_py.fill(0)
+        self.pfjets_pz.fill(0)
 
         self.calojets_pt.fill(0)
         self.calojets_eta.fill(0)
         self.calojets_phi.fill(0)
         self.calojets_energy.fill(0)
+        self.calojets_px.fill(0)
+        self.calojets_py.fill(0)
+        self.calojets_pz.fill(0)
 
 # define deltaR
 def validatePhi(x):
@@ -141,75 +164,74 @@ if __name__ == "__main__":
     output = Output(outfile, nEvents)
 
     # loop over events
-    for iev, event in enumerate(events):
-        #if iev > 10:
-        #    break
-        eid = event.object().id()
-        if iev%10 == 0:
-            print("Event {0}/{1}".format(iev, nEvents))
-        eventId = (eid.run(), eid.luminosityBlock(), int(eid.event()))
-        evdesc.get(event)
+    with tqdm(total=nEvents) as pbar:
+        for iev, event in enumerate(events):
+            eid = event.object().id()
+            eventId = (eid.run(), eid.luminosityBlock(), int(eid.event()))
+            evdesc.get(event)
 
-        # Get the list of pf jets
-        output.npfjets[iev] = len(evdesc.pfJet.product())
-        for i, pfJ in enumerate(evdesc.pfJet.product()):
-            if i > output.maxpfjets:
-                print("More than {} jets, move on to the next event".format(output.maxpfjets))
-                break
-
-            # Fill the output PF Jets, already sorted by descending pT
-            output.pfjets_pt[iev, i] = pfJ.pt()
-            output.pfjets_eta[iev, i] = pfJ.eta()
-            output.pfjets_phi[iev, i] = pfJ.phi()
-            output.pfjets_energy[iev, i] = pfJ.energy()
-
-            # Find the closest calo jet to the given pf jet
-            if args.verbose:
-                print("PF Jet #{}: pt {} eta {} phi {}".format(i, pfJ.pt(), pfJ.eta(), pfJ.phi()))
-            minDR = 1e8
-            bestJ = 0
-            for j, caloJ in enumerate(evdesc.caloJet.product()):
-                dR = deltaR(caloJ, pfJ)
-                if dR < minDR:
-                    minDR = dR
-                    bestJ = j
-            closestCJ = evdesc.caloJet.product().at(bestJ)
-            if args.verbose:
-                print("\tMatching caloJet #{}: pt {} eta {} phi {}. Distance = {}".format(bestJ, closestCJ.pt(),
-                                                                            closestCJ.eta(),
-                                                                            closestCJ.phi(),
-                                                                            minDR))
-            output.calojets_pt[iev, i] = closestCJ.pt()
-            output.calojets_eta[iev, i] = closestCJ.eta()
-            output.calojets_phi[iev, i] = closestCJ.phi()
-            output.calojets_energy[iev, i] = closestCJ.energy()
-
-            # Find all the pixel tracks of the given calo jet cone
-            itrack = 0
-            for t, ptrack in enumerate(evdesc.pixelTrack.product()):
-                if itrack > output.maxtracks:
-                    print("More than {} tracks, move on to the next jet".format(output.maxtracks))
+            # Get the list of pf jets
+            output.npfjets[iev] = len(evdesc.pfJet.product())
+            for i, pfJ in enumerate(evdesc.pfJet.product()):
+                if i > output.maxpfjets:
+                    print("More than {} jets, move on to the next event".format(output.maxpfjets))
                     break
 
-                dR = deltaR(closestCJ, ptrack)
-                if dR < 0.4:
-                    if args.verbose:
-                        print("\t\tContaining track #{}: pt {} eta {} phi {}. dR = {}".format(t, ptrack.pt(),
-                                                                            ptrack.eta(),
-                                                                            ptrack.phi(), dR))
-                    output.tracks_pt[iev, i, itrack] = ptrack.pt()
-                    output.tracks_eta[iev, i, itrack] = ptrack.eta()
-                    output.tracks_phi[iev, i, itrack] = ptrack.phi()
-                    itrack += 1
+                # Fill the output PF Jets, already sorted by descending pT
+                output.pfjets_pt[iev, i] = pfJ.pt()
+                output.pfjets_eta[iev, i] = pfJ.eta()
+                output.pfjets_phi[iev, i] = pfJ.phi()
+                output.pfjets_energy[iev, i] = pfJ.energy()
+                output.pfjets_px[iev, i] = pfJ.px()
+                output.pfjets_py[iev, i] = pfJ.py()
+                output.pfjets_pz[iev, i] = pfJ.pz()
 
-         # caloTower is empty on the first event, not sure why
-#        for i, p in enumerate(evdesc.caloTower.product()):
-#            print("First BX {}, last BX {}".format(p.getFirstBX(), p.getLastBX()))
-#            for bx in xrange(p.getFirstBX(), p.getLastBX()+1):
-#                for j in xrange(p.size(bx)):
-#                    ctobject = p.at(bx, j)
-#                    print("Calo Tower # {}: BX {} - {}, pt {}, eta {}, phi".format(i, bx, j, ctobject.pt(), ctobject.eta(), ctobject.phi()))
+                # Find the closest calo jet to the given pf jet
+                if args.verbose:
+                    print("PF Jet #{}: pt {} eta {} phi {}".format(i, pfJ.pt(), pfJ.eta(), pfJ.phi()))
+                minDR = 1e8
+                bestJ = 0
+                for j, caloJ in enumerate(evdesc.caloJet.product()):
+                    dR = deltaR(caloJ, pfJ)
+                    if dR < minDR:
+                        minDR = dR
+                        bestJ = j
+                closestCJ = evdesc.caloJet.product().at(bestJ)
+                if args.verbose:
+                    print("\tMatching caloJet #{}: pt {} eta {} phi {}. Distance = {}".format(bestJ, closestCJ.pt(),
+                                                                                closestCJ.eta(),
+                                                                                closestCJ.phi(),
+                                                                                minDR))
+                output.calojets_pt[iev, i] = closestCJ.pt()
+                output.calojets_eta[iev, i] = closestCJ.eta()
+                output.calojets_phi[iev, i] = closestCJ.phi()
+                output.calojets_energy[iev, i] = closestCJ.energy()
+                output.calojets_px[iev, i] = closestCJ.px()
+                output.calojets_py[iev, i] = closestCJ.py()
+                output.calojets_pz[iev, i] = closestCJ.pz()
 
+                # Find all the pixel tracks of the given calo jet cone
+                itrack = 0
+                for t, ptrack in enumerate(evdesc.pixelTrack.product()):
+                    if itrack > output.maxtracks:
+                        print("More than {} tracks, move on to the next jet".format(output.maxtracks))
+                        break
+
+                    dR = deltaR(closestCJ, ptrack)
+                    if dR < 0.4:
+                        if args.verbose:
+                            print("\t\tContaining track #{}: pt {} eta {} phi {}. dR = {}".format(t, ptrack.pt(),
+                                                                                ptrack.eta(),
+                                                                                ptrack.phi(), dR))
+                        output.tracks_pt[iev, i, itrack] = ptrack.pt()
+                        output.tracks_eta[iev, i, itrack] = ptrack.eta()
+                        output.tracks_phi[iev, i, itrack] = ptrack.phi()
+                        output.tracks_px[iev, i, itrack] = ptrack.px()
+                        output.tracks_py[iev, i, itrack] = ptrack.py()
+                        output.tracks_pz[iev, i, itrack] = ptrack.pz()
+                        itrack += 1
+
+            pbar.update(1)
     
     # Save the output
     output.save(outfile)
