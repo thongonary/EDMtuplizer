@@ -105,25 +105,29 @@ class AutoEncoder(nn.Module):
 def train(model, train_loader, val_loader, epoch, loss_function, optimizer, scheduler): 
     model.train()
     loop = tqdm(train_loader)
+    ndata = 0
+    sumloss = 0
     for data, target in loop:
         if torch.cuda.is_available():
-            data, target = (data.cuda(), 
-                            target.cuda()) 
-        
+            data, target = (data.squeeze(1).cuda(), 
+                            target.squeeze(1).cuda()) 
         optimizer.zero_grad()
         prediction = model(data)
         
         loss = loss_function(prediction, target)
         losses['train'].append(loss.item())
-        
+        ndata += len(data)
+        sumloss += loss.item()
         loss.backward()
         optimizer.step()
         
         loop.set_description('Epoch {}/{}'.format(epoch + 1, n_epochs))
-        loop.set_postfix(loss=loss.item())
+        loop.set_postfix(loss=sumloss/ndata)
     del loop 
     model.eval()
     loop = tqdm(val_loader, ncols=100)
+    ndata = 0
+    sumloss = 0
     for data, target in loop:
         if torch.cuda.is_available():
             data, target = (data.cuda(), 
@@ -133,10 +137,12 @@ def train(model, train_loader, val_loader, epoch, loss_function, optimizer, sche
         
         loss = loss_function(prediction, target)
         losses['val'].append(loss.item())
+        ndata += len(data)
+        sumloss += loss.item()
         
         loop.set_description('Validation')
-        loop.set_postfix(loss=loss.item())
-    scheduler.step(loss)
+        loop.set_postfix(loss=sumloss/ndata)
+    scheduler.step(sumloss/ndata)
     del loop
 
 if __name__ == "__main__":
@@ -193,6 +199,6 @@ if __name__ == "__main__":
                 epoch=epoch,
                 scheduler=scheduler)
     model.save("test.torch")
-    print("Loss history:")
-    print(losses)
+    #print("Loss history:")
+    #print(losses)
     # TODO: Tensorboard to keep the loss history
