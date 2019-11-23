@@ -7,7 +7,7 @@ from tqdm import tqdm
 from torch import nn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau, CyclicLR, OneCycleLR
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
@@ -123,6 +123,8 @@ def train(model, train_loader, val_loader, epoch, loss_function, optimizer, sche
         
         loop.set_description('Epoch {}/{}'.format(epoch + 1, n_epochs))
         loop.set_postfix(loss=sumloss/ndata)
+        scheduler.step(sumloss/ndata)
+
     del loop 
     model.eval()
     loop = tqdm(val_loader, ncols=100)
@@ -142,7 +144,6 @@ def train(model, train_loader, val_loader, epoch, loss_function, optimizer, sche
         
         loop.set_description('Validation')
         loop.set_postfix(loss=sumloss/ndata)
-    scheduler.step(sumloss/ndata)
     del loop
 
 if __name__ == "__main__":
@@ -154,6 +155,14 @@ if __name__ == "__main__":
     parser.add_argument("-s", '--random-seed', default=12, help='Random seed')
     args = parser.parse_args()
     
+    # set seed
+    torch.manual_seed(args.random_seed) 
+    np.random.seed(args.random_seed)
+
+    # For reproducibility
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
     n_epochs = args.epochs
 
     data = JetDataset(args.input)
@@ -161,7 +170,6 @@ if __name__ == "__main__":
     indices = list(range(num_train))
     split = int(np.floor(args.val_frac * num_train))
 
-    np.random.seed(args.random_seed)
     np.random.shuffle(indices)
 
     train_idx, valid_idx = indices[split:], indices[:split]
@@ -180,16 +188,12 @@ if __name__ == "__main__":
         model = model.cuda()
 
     criterion = torch.nn.L1Loss(reduction='sum')
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
-    scheduler = ReduceLROnPlateau(optimizer, 
-                                  mode='min',
-                                  factor=0.3,
-                                  patience=5,
-                                  verbose=1,
-                                  threshold=1e-4,
-                                  cooldown=2,
-                                  min_lr=1e-7
-                                 )
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, momentum=0.9)
+    scheduler = OneCycleLR(optimizer,
+                         max_lr=1e-3,
+                         steps_per_epoch=len(train_loader),
+                         epochs=n_epochs
+                         )
     losses = {'train': [], 'val': []}
     for epoch in range(n_epochs):
         train(model=model, train_loader=train_loader,
