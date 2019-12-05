@@ -147,7 +147,7 @@ if __name__ == "__main__":
     cwd = os.getcwd()
     parser = argparse.ArgumentParser(description='Ntuplizing EDM file.')
     parser.add_argument('--input', type=str,
-                        default="/afs/cern.ch/work/a/adiflori/public/forMaurizio/step3.root",
+                        default="/eos/cms/store/group/dpg_trigger/comm_trigger/TriggerStudiesGroup/Upgrade/EGM_POG/step3_200_250hlt_patatrack.root",
                         help='Input file')
     parser.add_argument('--outdir', type=str,
                         default=cwd,
