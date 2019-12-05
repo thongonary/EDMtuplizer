@@ -7,6 +7,11 @@ import argparse
 import h5py
 from tqdm import tqdm
 
+##### THRESHOLDS #####
+JET_PT = 20
+
+######################
+
 class HandleLabel:
     def __init__(self, dtype, label):
         self.handle = Handle(dtype)
@@ -75,28 +80,28 @@ class Output:
     def save(self, filename):
         with h5py.File(filename, "w") as outfile:
             outfile.create_dataset("npfjets", data=self.npfjets, dtype=np.int32)
-            outfile.create_dataset("pfjets_pt", data=self.pfjets_pt, dtype=np.float16)
-            outfile.create_dataset("pfjets_eta", data=self.pfjets_eta, dtype=np.float16)
-            outfile.create_dataset("pfjets_phi", data=self.pfjets_phi, dtype=np.float16)
-            outfile.create_dataset("pfjets_energy", data=self.pfjets_energy, dtype=np.float16)
-            outfile.create_dataset("pfjets_px", data=self.pfjets_px, dtype=np.float16)
-            outfile.create_dataset("pfjets_py", data=self.pfjets_py, dtype=np.float16)
-            outfile.create_dataset("pfjets_pz", data=self.pfjets_pz, dtype=np.float16)
+            outfile.create_dataset("pfjets_pt", data=self.pfjets_pt, dtype=np.float32)
+            outfile.create_dataset("pfjets_eta", data=self.pfjets_eta, dtype=np.float32)
+            outfile.create_dataset("pfjets_phi", data=self.pfjets_phi, dtype=np.float32)
+            outfile.create_dataset("pfjets_energy", data=self.pfjets_energy, dtype=np.float32)
+            outfile.create_dataset("pfjets_px", data=self.pfjets_px, dtype=np.float32)
+            outfile.create_dataset("pfjets_py", data=self.pfjets_py, dtype=np.float32)
+            outfile.create_dataset("pfjets_pz", data=self.pfjets_pz, dtype=np.float32)
 
-            outfile.create_dataset("calojets_pt", data=self.calojets_pt, dtype=np.float16)
-            outfile.create_dataset("calojets_eta", data=self.calojets_eta, dtype=np.float16)
-            outfile.create_dataset("calojets_phi", data=self.calojets_phi, dtype=np.float16)
-            outfile.create_dataset("calojets_energy", data=self.calojets_energy, dtype=np.float16)
-            outfile.create_dataset("calojets_px", data=self.calojets_px, dtype=np.float16)
-            outfile.create_dataset("calojets_py", data=self.calojets_py, dtype=np.float16)
-            outfile.create_dataset("calojets_pz", data=self.calojets_pz, dtype=np.float16)
+            outfile.create_dataset("calojets_pt", data=self.calojets_pt, dtype=np.float32)
+            outfile.create_dataset("calojets_eta", data=self.calojets_eta, dtype=np.float32)
+            outfile.create_dataset("calojets_phi", data=self.calojets_phi, dtype=np.float32)
+            outfile.create_dataset("calojets_energy", data=self.calojets_energy, dtype=np.float32)
+            outfile.create_dataset("calojets_px", data=self.calojets_px, dtype=np.float32)
+            outfile.create_dataset("calojets_py", data=self.calojets_py, dtype=np.float32)
+            outfile.create_dataset("calojets_pz", data=self.calojets_pz, dtype=np.float32)
 
-            outfile.create_dataset("tracks_pt", data=self.tracks_pt, dtype=np.float16)
-            outfile.create_dataset("tracks_eta", data=self.tracks_eta, dtype=np.float16)
-            outfile.create_dataset("tracks_phi", data=self.tracks_phi, dtype=np.float16)
-            outfile.create_dataset("tracks_px", data=self.tracks_px, dtype=np.float16)
-            outfile.create_dataset("tracks_py", data=self.tracks_py, dtype=np.float16)
-            outfile.create_dataset("tracks_pz", data=self.tracks_pz, dtype=np.float16)
+            outfile.create_dataset("tracks_pt", data=self.tracks_pt, dtype=np.float32)
+            outfile.create_dataset("tracks_eta", data=self.tracks_eta, dtype=np.float32)
+            outfile.create_dataset("tracks_phi", data=self.tracks_phi, dtype=np.float32)
+            outfile.create_dataset("tracks_px", data=self.tracks_px, dtype=np.float32)
+            outfile.create_dataset("tracks_py", data=self.tracks_py, dtype=np.float32)
+            outfile.create_dataset("tracks_pz", data=self.tracks_pz, dtype=np.float32)
 
         print("Saved output to {}".format(filename))
 
@@ -176,6 +181,8 @@ if __name__ == "__main__":
                 if i > output.maxpfjets:
                     print("More than {} jets, move on to the next event".format(output.maxpfjets))
                     break
+                if pfJ.pt() < JET_PT:
+                    continue
 
                 # Fill the output PF Jets, already sorted by descending pT
                 output.pfjets_pt[iev, i] = pfJ.pt()
@@ -192,6 +199,8 @@ if __name__ == "__main__":
                 minDR = 1e8
                 bestJ = 0
                 for j, caloJ in enumerate(evdesc.caloJet.product()):
+                    if caloJ.pt() < JET_PT: 
+                        continue
                     dR = deltaR(caloJ, pfJ)
                     if dR < minDR:
                         minDR = dR
