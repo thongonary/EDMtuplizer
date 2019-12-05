@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 ##### THRESHOLDS #####
 JET_PT = 20
+TRACKS_PER_JET = 100
 
 ######################
 
@@ -29,13 +30,12 @@ class HandleLabel:
 class EventDesc:
     def __init__(self):
         # From edmDumpEventContent
-        self.caloTower = HandleLabel("BXVector<l1t::CaloTower>", ("caloStage2Digis", "CaloTower"))
-        self.caloJet = HandleLabel("std::vector<reco::CaloJet>", "ak4CaloJets")
-        self.pfJet = HandleLabel("std::vector<reco::PFJet>", "ak4PFJetsCHS") # assuming we want CHS
+        #self.caloTower = HandleLabel("BXVector<l1t::CaloTower>", ("caloStage2Digis", "CaloTower"))
+        self.caloJet = HandleLabel("std::vector<reco::CaloJet>", "hltAK4CaloJets")
+        self.pfJet = HandleLabel("std::vector<reco::PFJet>", "hltAK4PFJets") 
         self.pixelTrack = HandleLabel("std::vector<reco::Track>", "pixelTracks")
-
     def get(self, event):
-        self.caloTower.getByLabel(event)
+        #self.caloTower.getByLabel(event)
         self.caloJet.getByLabel(event)
         self.pfJet.getByLabel(event)
         self.pixelTrack.getByLabel(event)
@@ -66,7 +66,7 @@ class Output:
         self.calojets_pz = np.zeros((self.maxEvents, self.maxcalojets), dtype=np.float32)
 
         # Pixel tracks inside the calo jet cone
-        self.maxtracks = 20
+        self.maxtracks = TRACKS_PER_JET
         self.tracks_pt = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
         self.tracks_eta = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
         self.tracks_phi = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     cwd = os.getcwd()
     parser = argparse.ArgumentParser(description='Ntuplizing EDM file.')
     parser.add_argument('--input', type=str,
-                        default="/eos/cms/store/group/dpg_trigger/comm_trigger/TriggerStudiesGroup/Upgrade/EGM_POG/step3_200_250hlt_patatrack.root",
+                        default="/eos/cms/store/group/phys_tracking/patatrack/TRK_POG/step3_750_800hlt_patatrack.root",
                         help='Input file')
     parser.add_argument('--outdir', type=str,
                         default=cwd,
@@ -176,9 +176,9 @@ if __name__ == "__main__":
             evdesc.get(event)
 
             # Get the list of pf jets
-            output.npfjets[iev] = len(evdesc.pfJet.product())
+            nPFJets = 0
             for i, pfJ in enumerate(evdesc.pfJet.product()):
-                if i > output.maxpfjets:
+                if nPFJets >= output.maxpfjets:
                     print("More than {} jets, move on to the next event".format(output.maxpfjets))
                     break
                 if pfJ.pt() < JET_PT:
@@ -192,7 +192,7 @@ if __name__ == "__main__":
                 output.pfjets_px[iev, i] = pfJ.px()
                 output.pfjets_py[iev, i] = pfJ.py()
                 output.pfjets_pz[iev, i] = pfJ.pz()
-
+                nPFJets += 1
                 # Find the closest calo jet to the given pf jet
                 if args.verbose:
                     print("PF Jet #{}: pt {} eta {} phi {}".format(i, pfJ.pt(), pfJ.eta(), pfJ.phi()))
@@ -222,8 +222,8 @@ if __name__ == "__main__":
                 # Find all the pixel tracks of the given calo jet cone
                 itrack = 0
                 for t, ptrack in enumerate(evdesc.pixelTrack.product()):
-                    if itrack > output.maxtracks:
-                        print("More than {} tracks, move on to the next jet".format(output.maxtracks))
+                    if itrack >= output.maxtracks:
+                        print("More than {} tracks per jet, move on to the next jet".format(output.maxtracks))
                         break
 
                     dR = deltaR(closestCJ, ptrack)
@@ -239,8 +239,19 @@ if __name__ == "__main__":
                         output.tracks_py[iev, i, itrack] = ptrack.py()
                         output.tracks_pz[iev, i, itrack] = ptrack.pz()
                         itrack += 1
-
+            
+            # Update number of PF jets
+            output.npfjets[iev] = nPFJets 
             pbar.update(1)
-    
+            
+#            # DEBUGGING: Count number of Calo jets
+#            nCalojets = 0
+#            for j, caloJ in enumerate(evdesc.caloJet.product()):
+#                if caloJ.pt() < JET_PT: 
+#                    continue
+#                nCalojets += 1
+#
+#            print ("This event has {} PF Jets, {} Calojets and {} pixel tracks".format(nPFJets, nCalojets, len(evdesc.pixelTrack.product())))
+#            if iev > 10: break
     # Save the output
     output.save(outfile)
