@@ -1,6 +1,6 @@
 # ParticleFlow Regression
 
-Run `python ntuplizer.py` in an CMSSW environment to convert the EDM ROOT file to h5py. I use `10_2_13` (random choice).
+Run `python ntuplizer.py` in an CMSSW environment (10_6_6) to convert the EDM ROOT file to h5py.
 
 The h5py file is structured as follow:
 - List of PF jets, sorted by descending pT as in the original EDM file
