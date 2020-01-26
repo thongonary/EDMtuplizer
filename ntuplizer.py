@@ -10,8 +10,15 @@ from tqdm import tqdm
 ##### THRESHOLDS #####
 JET_PT = 20
 TRACKS_PER_JET = 100
+MAX_EB_HITS = 1000
+MAX_HCAL_HITS = 2000
 
 ######################
+def listMethod(obj):
+    obj_methods = [method_name for method_name in dir(obj)
+            if callable(getattr(obj, method_name))]
+
+    print("Object methods = {}".format(obj_methods))
 
 class HandleLabel:
     def __init__(self, dtype, label):
@@ -31,6 +38,9 @@ class EventDesc:
     def __init__(self):
         # From edmDumpEventContent
         #self.caloTower = HandleLabel("BXVector<l1t::CaloTower>", ("caloStage2Digis", "CaloTower"))
+        self.ebHit = HandleLabel("edm::SortedCollection<EcalRecHit,edm::StrictWeakOrdering<EcalRecHit>>", ("hltEcalRecHit", "EcalRecHitsEB"))
+        self.eeHit = HandleLabel("edm::SortedCollection<EcalRecHit,edm::StrictWeakOrdering<EcalRecHit>>", ("hltEcalRecHit", "EcalRecHitsEE"))
+        self.hcalHit = HandleLabel("edm::SortedCollection<HBHERecHit,edm::StrictWeakOrdering<HBHERecHit>>", "hltHbhereco")
         self.caloJet = HandleLabel("std::vector<reco::CaloJet>", "hltAK4CaloJets")
         self.pfJet = HandleLabel("std::vector<reco::PFJet>", "hltAK4PFJets") 
         self.pixelTrack = HandleLabel("std::vector<reco::Track>", "pixelTracks")
@@ -39,6 +49,9 @@ class EventDesc:
         self.caloJet.getByLabel(event)
         self.pfJet.getByLabel(event)
         self.pixelTrack.getByLabel(event)
+        self.ebHit.getByLabel(event)
+        self.eeHit.getByLabel(event)
+        self.hcalHit.getByLabel(event)
 
 class Output:
     def __init__(self, outfile, maxEvents):
@@ -74,8 +87,17 @@ class Output:
         self.tracks_py = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
         self.tracks_pz = np.zeros((self.maxEvents, self.maxcalojets, self.maxtracks), dtype=np.float32)
         
-        # Calo Tower
-        # To be updated
+        # ECAL Hit
+        self.maxEhits = MAX_EB_HITS
+        self.ebhit_energy = np.zeros((self.maxEvents, self.maxcalojets, self.maxEhits), dtype=np.float32)
+        self.ebhit_eta = np.zeros((self.maxEvents, self.maxcalojets, self.maxEhits), dtype=np.float32)
+        self.ebhit_phi = np.zeros((self.maxEvents, self.maxcalojets, self.maxEhits), dtype=np.float32)
+        
+        # HCAL Hit
+        self.maxHhits = MAX_HCAL_HITS
+        self.hcalhit_energy = np.zeros((self.maxEvents, self.maxcalojets, self.maxHhits), dtype=np.float32)
+        self.hcalhit_eta = np.zeros((self.maxEvents, self.maxcalojets, self.maxHhits), dtype=np.float32)
+        self.hcalhit_phi = np.zeros((self.maxEvents, self.maxcalojets, self.maxHhits), dtype=np.float32)
 
     def save(self, filename):
         with h5py.File(filename, "w") as outfile:
@@ -102,33 +124,16 @@ class Output:
             outfile.create_dataset("tracks_px", data=self.tracks_px, dtype=np.float32)
             outfile.create_dataset("tracks_py", data=self.tracks_py, dtype=np.float32)
             outfile.create_dataset("tracks_pz", data=self.tracks_pz, dtype=np.float32)
+            
+            outfile.create_dataset("ebhit_energy", data=self.ebhit_energy, dtype=np.float32)
+            outfile.create_dataset("ebhit_eta", data=self.ebhit_eta, dtype=np.float32)
+            outfile.create_dataset("ebhit_phi", data=self.ebhit_phi, dtype=np.float32)
+            
+            outfile.create_dataset("hcalhit_energy", data=self.hcalhit_energy, dtype=np.float32)
+            outfile.create_dataset("hcalhit_eta", data=self.hcalhit_eta, dtype=np.float32)
+            outfile.create_dataset("hcalhit_phi", data=self.hcalhit_phi, dtype=np.float32)
 
         print("Saved output to {}".format(filename))
-
-    def clear(self):
-        self.tracks_pt.fill(0)
-        self.tracks_phi.fill(0)
-        self.tracks_eta.fill(0)
-        self.tracks_px.fill(0)
-        self.tracks_py.fill(0)
-        self.tracks_pz.fill(0)
-
-        self.npfjets.fill(0)
-        self.pfjets_pt.fill(0)
-        self.pfjets_eta.fill(0)
-        self.pfjets_phi.fill(0)
-        self.pfjets_energy.fill(0)
-        self.pfjets_px.fill(0)
-        self.pfjets_py.fill(0)
-        self.pfjets_pz.fill(0)
-
-        self.calojets_pt.fill(0)
-        self.calojets_eta.fill(0)
-        self.calojets_phi.fill(0)
-        self.calojets_energy.fill(0)
-        self.calojets_px.fill(0)
-        self.calojets_py.fill(0)
-        self.calojets_pz.fill(0)
 
 # define deltaR
 def validatePhi(x):
@@ -141,6 +146,11 @@ def validatePhi(x):
 def deltaR(a,b):
     deta = a.eta()-b.eta()
     dphi = validatePhi(a.phi()-b.phi());
+    return math.sqrt(deta*deta + dphi*dphi)
+
+def deltaR_raw(eta1, phi1, eta2, phi2):
+    deta = eta2 - eta1
+    dphi = validatePhi(phi2 - phi1)
     return math.sqrt(deta*deta + dphi*dphi)
 
 if __name__ == "__main__":
@@ -240,6 +250,43 @@ if __name__ == "__main__":
                         output.tracks_pz[iev, i, itrack] = ptrack.pz()
                         itrack += 1
             
+                # Find all ecal rechit in this jet cone
+                ihit = 0
+                for h, ebhit in enumerate(evdesc.ebHit.product()):
+                    if ihit >= output.maxEhits:
+                        print("More than {} EB hits per jet, move on to the next jet".format(output.maxEhits))
+                        break
+                    key = ebhit.detid().rawId()
+                    detid = ROOT.EBDetId(key)
+                    ebhit_energy = ebhit.energy()
+                    ebhit_eta = detid.approxEta()
+                    ebhit_phi = (detid.iphi() - 180.)/360. * math.pi # not sure if correct
+                    dR = deltaR_raw(closestCJ.eta(), closestCJ.phi(), ebhit_eta, ebhit_phi)
+                    if dR < 0.4:
+                        output.ebhit_energy[iev, i, ihit] = ebhit_energy
+                        output.ebhit_eta[iev, i, ihit] = ebhit_eta
+                        output.ebhit_phi[iev, i, ihit] = ebhit_phi
+                        ihit += 1
+
+                # Find all hcal rechit in this jet cone
+                ihit = 0
+                for h, hcalhit in enumerate(evdesc.hcalHit.product()):
+                    if ihit >= output.maxHhits:
+                        print("More than {} HCAL hits per jet, move on to the next jet".format(output.maxHhits))
+                        break
+                    key = hcalhit.detid().rawId()
+                    detid = ROOT.EBDetId(key)
+                    hcalhit_energy = hcalhit.energy()
+                    hcalhit_eta = detid.approxEta()
+                    hcalhit_phi = (detid.iphi() - 36.)/72. * math.pi # not sure if correct
+                    dR = deltaR_raw(closestCJ.eta(), closestCJ.phi(), hcalhit_eta, hcalhit_phi)
+                    if dR < 0.4:
+                        output.hcalhit_energy[iev, i, ihit] = hcalhit_energy
+                        output.hcalhit_eta[iev, i, ihit] = hcalhit_eta
+                        output.hcalhit_phi[iev, i, ihit] = hcalhit_phi
+                        ihit += 1
+                    
+                
             # Update number of PF jets
             output.npfjets[iev] = nPFJets 
             pbar.update(1)
